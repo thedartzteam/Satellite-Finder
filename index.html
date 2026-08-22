@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>SatLock — Dish Aiming &amp; Install Tool</title>
+<meta name="theme-color" content="#0A0E17">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E17;
+    --surface:#121A29;
+    --surface-2:#182236;
+    --line:#243149;
+    --text:#E8ECF2;
+    --text-dim:#8B97AE;
+    --lock:#33C97F;
+    --lock-dim:#1C4F3A;
+    --amber:#F0A857;
+    --danger:#E8615D;
+    --radius:14px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif; overflow-x:hidden;}
+  body{padding-bottom:env(safe-area-inset-bottom);}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  header{
+    padding:calc(env(safe-area-inset-top) + 18px) 20px 14px;
+    background:linear-gradient(180deg, #0D1421 0%, var(--bg) 100%);
+    border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:20;
+  }
+  .brand{display:flex; align-items:baseline; gap:8px;}
+  .brand h1{font-size:20px; margin:0; font-weight:700; letter-spacing:-0.01em;}
+  .brand .dot{width:8px; height:8px; border-radius:50%; background:var(--text-dim); flex-shrink:0; transition:background .25s;}
+  .brand .dot.on{background:var(--lock); box-shadow:0 0 8px var(--lock);}
+  .brand small{color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em;}
+
+  nav.tabs{display:flex; gap:4px; margin-top:14px; background:var(--surface); border-radius:10px; padding:4px;}
+  nav.tabs button{
+    flex:1; padding:9px 0; border:none; background:transparent; color:var(--text-dim);
+    font-family:inherit; font-size:13px; font-weight:600; border-radius:8px; letter-spacing:.02em;
+  }
+  nav.tabs button.active{background:var(--surface-2); color:var(--text);}
+
+  main{padding:18px 20px 60px; max-width:520px; margin:0 auto;}
+  .view{display:none;}
+  .view.active{display:block; animation:fade .2s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:14px;}
+  .card h2{font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin:0 0 12px; font-weight:600;}
+
+  label.field{display:block; margin-bottom:12px;}
+  label.field span{display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px;}
+  select, input[type=number], input[type=text]{
+    width:100%; background:var(--surface-2); border:1px solid var(--line); color:var(--text);
+    padding:11px 12px; border-radius:9px; font-family:inherit; font-size:15px;
+  }
+  select:focus, input:focus{outline:2px solid var(--amber); outline-offset:0;}
+
+  button.btn{
+    width:100%; padding:13px; border:none; border-radius:9px; font-family:inherit;
+    font-weight:600; font-size:14px; letter-spacing:.01em;
+  }
+  button.btn.primary{background:var(--amber); color:#211405;}
+  button.btn.primary:active{transform:scale(.98);}
+  button.btn.ghost{background:var(--surface-2); color:var(--text); border:1px solid var(--line);}
+  button.btn:disabled{opacity:.5;}
+
+  .status-row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .status-row .msg{font-size:13px; color:var(--text-dim); line-height:1.4;}
+
+  .readout-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px;}
+  .readout{background:var(--surface-2); border-radius:10px; padding:12px;}
+  .readout .k{font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em;}
+  .readout .v{font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:700; margin-top:4px;}
+  .readout .u{font-size:12px; color:var(--text-dim); margin-left:2px;}
+  .readout.wide{grid-column:1/-1;}
+
+  /* Compass dial */
+  .dial-wrap{display:flex; flex-direction:column; align-items:center; padding:8px 0 4px;}
+  .dial{position:relative; width:min(78vw,300px); height:min(78vw,300px);}
+  .dial svg{width:100%; height:100%; display:block;}
+  .aim-pointer{
+    position:absolute; top:-2px; left:50%; transform:translateX(-50%);
+    width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent;
+    border-bottom:14px solid var(--amber); z-index:5;
+  }
+  .lock-msg{margin-top:14px; text-align:center; font-size:14px; font-weight:600; color:var(--text-dim); transition:color .2s;}
+  .lock-msg.locked{color:var(--lock);}
+
+  .tilt-strip{margin-top:10px; background:var(--surface-2); border-radius:10px; padding:14px; position:relative; height:56px; overflow:hidden;}
+  .tilt-track{position:absolute; left:16px; right:16px; top:50%; height:2px; background:var(--line); transform:translateY(-50%);}
+  .tilt-target{position:absolute; top:8px; bottom:8px; width:2px; background:var(--amber);}
+  .tilt-bubble{position:absolute; top:50%; width:34px; height:34px; border-radius:50%; background:var(--surface); border:2px solid var(--text-dim); transform:translate(-50%,-50%); transition:left .1s linear, background .2s, border-color .2s;}
+  .tilt-bubble.locked{border-color:var(--lock); background:var(--lock-dim);}
+  .tilt-labels{display:flex; justify-content:space-between; font-size:10px; color:var(--text-dim); margin-top:6px; font-family:'JetBrains Mono',monospace;}
+
+  .perm-note{font-size:12px; color:var(--text-dim); margin-top:10px; line-height:1.5;}
+  .warn{background:#2A1A16; border:1px solid #5A3324; color:#F0B090; padding:10px 12px; border-radius:9px; font-size:13px; margin-bottom:14px;}
+
+  /* Checklist */
+  .steps{list-style:none; margin:0; padding:0; counter-reset:step;}
+  .steps li{
+    display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); align-items:flex-start;
+  }
+  .steps li:last-child{border-bottom:none;}
+  .steps .num{
+    counter-increment:step; font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--amber);
+    font-size:13px; width:20px; flex-shrink:0; padding-top:2px;
+  }
+  .steps .num::before{content:counter(step, decimal-leading-zero);}
+  .steps .body{flex:1;}
+  .steps .body .t{font-size:14px; font-weight:600; margin-bottom:2px;}
+  .steps .body .d{font-size:13px; color:var(--text-dim); line-height:1.45;}
+  .steps input[type=checkbox]{
+    width:20px; height:20px; margin-top:2px; accent-color:var(--lock); flex-shrink:0;
+  }
+  .steps li.done .t, .steps li.done .d{color:var(--text-dim); text-decoration:line-through; text-decoration-color:var(--line);}
+
+  .tool-chip-list{display:flex; flex-wrap:wrap; gap:8px;}
+  .tool-chip{
+    display:flex; align-items:center; gap:7px; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:20px; padding:8px 12px; font-size:13px;
+  }
+  .tool-chip input{accent-color:var(--lock); width:16px; height:16px;}
+  .tool-chip.done{opacity:.5; text-decoration:line-through;}
+
+  .skew-banner{display:flex; align-items:center; gap:12px; background:var(--surface-2); border-radius:10px; padding:12px;}
+  .skew-banner .big{font-family:'JetBrains Mono',monospace; font-size:24px; font-weight:700; color:var(--amber);}
+  .skew-banner .txt{font-size:12px; color:var(--text-dim); line-height:1.4;}
+
+  .peak-controls{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;}
+  .nudge{display:flex; align-items:center; background:var(--surface-2); border-radius:9px; overflow:hidden;}
+  .nudge button{flex:1; background:none; border:none; color:var(--text); font-size:16px; padding:10px 0; font-family:inherit;}
+  .nudge .val{width:64px; text-align:center; font-family:'JetBrains Mono',monospace; font-size:13px;}
+  input[type=range]{width:100%; accent-color:var(--lock);}
+  .signal-val{font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:700; text-align:right;}
+
+  .log-item{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--line); font-size:13px;}
+  .log-item:last-child{border-bottom:none;}
+  .log-item .l{color:var(--text-dim);}
+  .log-item .r{font-family:'JetBrains Mono',monospace;}
+  .empty{color:var(--text-dim); font-size:13px; text-align:center; padding:14px 0;}
+
+  details.math summary{cursor:pointer; font-size:12px; color:var(--text-dim); list-style:none;}
+  details.math summary::-webkit-details-marker{display:none;}
+  details.math summary::before{content:"▸ "; color:var(--amber);}
+  details.math[open] summary::before{content:"▾ "; }
+  details.math .content{font-size:12px; color:var(--text-dim); line-height:1.6; margin-top:8px; font-family:'JetBrains Mono',monospace; white-space:pre-wrap;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div id="statusDot" class="dot"></div>
+    <h1>SatLock</h1>
+  </div>
+  <small>Dish aiming &amp; install log</small>
+  <nav class="tabs">
+    <button id="tabLocateBtn" class="active">Locate</button>
+    <button id="tabInstallBtn">Install</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ============ LOCATE VIEW ============ -->
+  <section id="viewLocate" class="view active">
+
+    <div class="card">
+      <h2>Target satellite</h2>
+      <label class="field">
+        <span>Preset</span>
+        <select id="satPreset">
+          <option value="36.0">DStv — Eutelsat 36B/36D, 36.0°E</option>
+          <option value="3.1">StarTimes — Eutelsat 3B, 3.1°E</option>
+          <option value="4.9">Zuku TV — SES-5, 4.9°E</option>
+          <option value="7.0">GOtv / regional — Eutelsat 7B, 7.0°E</option>
+          <option value="-8.0">beIN Sports (MENA beam, weak/marginal in East Africa) — Eutelsat 8 West B, 8.0°W</option>
+          <option value="26.0">Es'hail 2 / beIN &amp; Al Jazeera (MENA beam, weak/marginal in East Africa) — 26.0°E</option>
+          <option value="26.0-badr">Badr (Arabsat) C/Ku, MENA hotspot, reaches parts of Sub-Saharan Africa — 26.0°E</option>
+          <option value="-7.0">Nilesat — 7.0°W, partial East Africa reach</option>
+          <option value="custom">Custom longitude…</option>
+        </select>
+      </label>
+      <label class="field" id="customLonField" style="display:none;">
+        <span>Satellite longitude (°, east positive, west negative)</span>
+        <input type="number" id="customLon" step="0.1" placeholder="e.g. 20.0">
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>Location</h2>
+      <div class="status-row">
+        <div class="msg" id="locMsg">Turn on location to calibrate your position.</div>
+      </div>
+      <div id="locCoords" class="readout wide mono" style="display:none; margin-top:10px; padding:10px 12px;">
+        <span id="locCoordsText"></span>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn primary" id="calibrateBtn">Turn on location</button>
+      </div>
+    </div>
+
+    <div id="belowHorizonWarn" class="warn" style="display:none;">
+      This satellite is below the horizon from your location — it can't be seen from here. Check the longitude or pick another satellite.
+    </div>
+
+    <div class="card" id="readoutCard" style="display:none;">
+      <h2>Look angles</h2>
+      <div class="readout-grid">
+        <div class="readout"><div class="k">Azimuth</div><div class="v" id="valAz">—<span class="u">°</span></div></div>
+        <div class="readout"><div class="k">Elevation</div><div class="v" id="valEl">—<span class="u">°</span></div></div>
+        <div class="readout"><div class="k">LNB skew</div><div class="v" id="valSkew">—<span class="u">°</span></div></div>
+        <div class="readout"><div class="k">Range</div><div class="v" id="valDist">—<span class="u">km</span></div></div>
+      </div>
+    </div>
+
+    <div class="card" id="aimCard" style="display:none;">
+      <h2>Aim</h2>
+      <div class="dial-wrap">
+        <div class="dial">
+          <div class="aim-pointer"></div>
+          <svg viewBox="0 0 200 200">
+            <circle cx="100" cy="100" r="92" fill="none" stroke="#243149" stroke-width="1.5"/>
+            <circle cx="100" cy="100" r="70" fill="none" stroke="#182236" stroke-width="1"/>
+            <g id="rose"></g>
+            <g id="targetMarker">
+              <line x1="100" y1="100" x2="100" y2="16" stroke="#F0A857" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="100" cy="16" r="6" fill="#F0A857"/>
+            </g>
+            <circle cx="100" cy="100" r="4" fill="#8B97AE"/>
+          </svg>
+        </div>
+        <div class="lock-msg" id="lockMsg">Enable the compass to start aiming</div>
+        <button class="btn ghost" id="compassBtn" style="margin-top:12px;">Enable compass</button>
+      </div>
+
+      <div class="tilt-strip" id="tiltStrip" style="display:none;">
+        <div class="tilt-track"></div>
+        <div class="tilt-target" id="tiltTarget"></div>
+        <div class="tilt-bubble" id="tiltBubble"></div>
+      </div>
+      <div class="tilt-labels" id="tiltLabelsRow" style="display:none;">
+        <span>tilt back</span>
+        <span id="tiltReading">0.0°</span>
+        <span>tilt forward</span>
+      </div>
+      <button class="btn ghost" id="zeroTiltBtn" style="margin-top:10px; display:none;">Zero tilt (hold phone level first)</button>
+      <p class="perm-note">Rotate slowly. The amber mark is the satellite's direction; the dot at center is your phone. When the pointer at top overlaps the mark and the tilt bubble sits on the amber line, the dial turns green — you're on target.</p>
+    </div>
+
+    <details class="math card">
+      <summary>How this is calculated</summary>
+      <div class="content" id="mathContent">Enter a location to see the working.</div>
+    </details>
+
+  </section>
+
+  <!-- ============ INSTALL VIEW ============ -->
+  <section id="viewInstall" class="view">
+
+    <div class="card" id="skewCard">
+      <h2>LNB skew for this job</h2>
+      <div class="skew-banner">
+        <div class="big" id="installSkew">—°</div>
+        <div class="txt" id="installSkewTxt">Calculate look angles on the Locate tab first — the skew and rotation direction will appear here.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Tools</h2>
+      <div class="tool-chip-list" id="toolList"></div>
+    </div>
+
+    <div class="card">
+      <h2>Procedure</h2>
+      <ul class="steps" id="stepList"></ul>
+    </div>
+
+    <div class="card">
+      <h2>Peak the signal</h2>
+      <p class="perm-note" style="margin-top:0;">Nudge the mount in small steps off the calculated angles and log the strongest reading from your receiver's signal meter.</p>
+      <label class="field">
+        <span>Azimuth offset from calculated (°)</span>
+        <div class="nudge">
+          <button id="azMinus">−</button>
+          <div class="val mono" id="azOffsetVal">0.0</div>
+          <button id="azPlus">+</button>
+        </div>
+      </label>
+      <label class="field">
+        <span>Elevation offset from calculated (°)</span>
+        <div class="nudge">
+          <button id="elMinus">−</button>
+          <div class="val mono" id="elOffsetVal">0.0</div>
+          <button id="elPlus">+</button>
+        </div>
+      </label>
+      <label class="field">
+        <span>Signal strength on receiver meter (%)</span>
+        <input type="range" id="signalSlider" min="0" max="100" value="0">
+        <div class="signal-val" id="signalVal">0%</div>
+      </label>
+      <button class="btn primary" id="logPeakBtn">Save this reading</button>
+      <div style="margin-top:14px;" id="peakLog"></div>
+    </div>
+
+  </section>
+
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- State ----------
+  let userLat = null, userLon = null, locAccuracy = null;
+  let satLon = 36.0;
+  let look = null; // {az, el, skew, dist, visible}
+  let compassOn = false, currentHeading = 0;
+  let tiltZero = null, currentBeta = null;
+  const LOCK_TOLERANCE_DEG = 4;
+
+  // ---------- Tabs ----------
+  const tabLocateBtn = document.getElementById('tabLocateBtn');
+  const tabInstallBtn = document.getElementById('tabInstallBtn');
+  const viewLocate = document.getElementById('viewLocate');
+  const viewInstall = document.getElementById('viewInstall');
+  tabLocateBtn.onclick = () => switchTab('locate');
+  tabInstallBtn.onclick = () => switchTab('install');
+  function switchTab(name){
+    const isLocate = name === 'locate';
+    tabLocateBtn.classList.toggle('active', isLocate);
+    tabInstallBtn.classList.toggle('active', !isLocate);
+    viewLocate.classList.toggle('active', isLocate);
+    viewInstall.classList.toggle('active', !isLocate);
+  }
+
+  // ---------- Satellite selection ----------
+  const satPreset = document.getElementById('satPreset');
+  const customLonField = document.getElementById('customLonField');
+  const customLon = document.getElementById('customLon');
+  satPreset.onchange = () => {
+    if (satPreset.value === 'custom'){
+      customLonField.style.display = 'block';
+      satLon = parseFloat(customLon.value) || 0;
+    } else {
+      customLonField.style.display = 'none';
+      satLon = parseFloat(satPreset.value);
+    }
+    recompute();
+  };
+  customLon.oninput = () => { satLon = parseFloat(customLon.value) || 0; recompute(); };
+
+  // ---------- Geolocation / calibration ----------
+  const statusDot = document.getElementById('statusDot');
+  const calibrateBtn = document.getElementById('calibrateBtn');
+  const locMsg = document.getElementById('locMsg');
+  const locCoords = document.getElementById('locCoords');
+  const locCoordsText = document.getElementById('locCoordsText');
+  let watchId = null;
+
+  calibrateBtn.onclick = () => {
+    if (!('geolocation' in navigator)){
+      locMsg.textContent = "This browser doesn't support location. Enter coordinates manually isn't available yet — try a different browser.";
+      return;
+    }
+    calibrateBtn.disabled = true;
+    calibrateBtn.textContent = 'Calibrating…';
+    locMsg.textContent = 'Finding your position…';
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
+      enableHighAccuracy: true, maximumAge: 5000, timeout: 20000
+    });
+  };
+
+  function onPosition(pos){
+    userLat = pos.coords.latitude;
+    userLon = pos.coords.longitude;
+    locAccuracy = pos.coords.accuracy;
+    statusDot.classList.add('on');
+    calibrateBtn.textContent = 'Recalibrate';
+    calibrateBtn.disabled = false;
+    locMsg.textContent = 'Calibrated. Updates automatically as you move.';
+    locCoords.style.display = 'block';
+    locCoordsText.textContent = userLat.toFixed(5) + '°, ' + userLon.toFixed(5) + '° · ±' + Math.round(locAccuracy) + 'm';
+    recompute();
+  }
+
+  function onPositionError(err){
+    calibrateBtn.disabled = false;
+    calibrateBtn.textContent = 'Turn on location';
+    if (err.code === err.PERMISSION_DENIED){
+      locMsg.textContent = 'Location permission was denied. Turn it on in your browser or phone settings, then try again.';
+    } else {
+      locMsg.textContent = "Couldn't get a fix. Move to open sky and try again.";
+    }
+  }
+
+  // Try silently on load in case permission is already granted (no prompt if already denied/granted state known)
+  if ('permissions' in navigator){
+    navigator.permissions.query({name:'geolocation'}).then(res => {
+      if (res.state === 'granted') calibrateBtn.click();
+    }).catch(()=>{});
+  }
+
+  // ---------- Look-angle math (vector / ENU method) ----------
+  const RE = 6378.137;   // km, Earth radius
+  const RS = 42164.17;   // km, geostationary radius from Earth's centre
+  const toRad = d => d * Math.PI / 180;
+  const toDeg = r => r * 180 / Math.PI;
+
+  function computeLookAngles(lat, lon, satLonDeg){
+    const latR = toRad(lat), lonR = toRad(lon), satR = toRad(satLonDeg);
+
+    // ECEF (spherical Earth model)
+    const ox = RE * Math.cos(latR) * Math.cos(lonR);
+    const oy = RE * Math.cos(latR) * Math.sin(lonR);
+    const oz = RE * Math.sin(latR);
+
+    const sx = RS * Math.cos(satR);
+    const sy = RS * Math.sin(satR);
+    const sz = 0;
+
+    const dx = sx - ox, dy = sy - oy, dz = sz - oz;
+
+    // ENU rotation at observer
+    const E = -Math.sin(lonR) * dx + Math.cos(lonR) * dy;
+    const N = -Math.sin(latR) * Math.cos(lonR) * dx - Math.sin(latR) * Math.sin(lonR) * dy + Math.cos(latR) * dz;
+    const U =  Math.cos(latR) * Math.cos(lonR) * dx + Math.cos(latR) * Math.sin(lonR) * dy + Math.sin(latR) * dz;
+
+    let az = toDeg(Math.atan2(E, N));
+    if (az < 0) az += 360;
+    const el = toDeg(Math.atan2(U, Math.sqrt(E*E + N*N)));
+    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+    // Polarisation / LNB skew
+    const lonDiff = lonR - satR;
+    let skew = toDeg(Math.atan2(Math.sin(lonDiff), Math.tan(latR)));
+
+    return { az, el, skew, dist, visible: el > 0 };
+  }
+
+  // ---------- Recompute + render ----------
+  const readoutCard = document.getElementById('readoutCard');
+  const aimCard = document.getElementById('aimCard');
+  const belowHorizonWarn = document.getElementById('belowHorizonWarn');
+  const valAz = document.getElementById('valAz');
+  const valEl = document.getElementById('valEl');
+  const valSkew = document.getElementById('valSkew');
+  const valDist = document.getElementById('valDist');
+  const mathContent = document.getElementById('mathContent');
+  const installSkew = document.getElementById('installSkew');
+  const installSkewTxt = document.getElementById('installSkewTxt');
+
+  function recompute(){
+    if (userLat === null || userLon === null) return;
+    look = computeLookAngles(userLat, userLon, satLon);
+
+    readoutCard.style.display = 'block';
+    valAz.innerHTML = look.az.toFixed(1) + '<span class="u">°</span>';
+    valEl.innerHTML = look.el.toFixed(1) + '<span class="u">°</span>';
+    valSkew.innerHTML = look.skew.toFixed(1) + '<span class="u">°</span>';
+    valDist.innerHTML = Math.round(look.dist).toLocaleString() + '<span class="u">km</span>';
+
+    belowHorizonWarn.style.display = look.visible ? 'none' : 'block';
+    aimCard.style.display = look.visible ? 'block' : 'none';
+
+    mathContent.textContent =
+      'Vector look-angle method (spherical Earth, R=' + RE + ' km)\n' +
+      'Geostationary radius: ' + RS + ' km\n' +
+      'Observer: ' + userLat.toFixed(4) + '°, ' + userLon.toFixed(4) + '°\n' +
+      'Satellite longitude: ' + satLon.toFixed(2) + '°E\n' +
+      '1. Convert both points to Earth-centred XYZ.\n' +
+      '2. Vector d = satellite − observer.\n' +
+      '3. Rotate d into the observer\'s East-North-Up frame.\n' +
+      '4. Azimuth = atan2(E, N); Elevation = atan2(U, √(E²+N²)).\n' +
+      '5. Skew = atan2(sin(Δlon), tan(lat)).';
+
+    // Install tab
+    const dir = look.skew >= 0 ? 'clockwise' : 'counter-clockwise';
+    installSkew.textContent = Math.abs(look.skew).toFixed(1) + '°';
+    installSkewTxt.textContent = 'Rotate the LNB ' + dir + ' from vertical (viewed from behind the dish, facing the satellite) by this amount, then lock the collar.';
+
+    if (compassOn) updateDial();
+  }
+
+  // ---------- Compass dial ----------
+  const compassBtn = document.getElementById('compassBtn');
+  const lockMsg = document.getElementById('lockMsg');
+  const rose = document.getElementById('rose');
+  const targetMarker = document.getElementById('targetMarker');
+  const tiltStrip = document.getElementById('tiltStrip');
+  const tiltLabelsRow = document.getElementById('tiltLabelsRow');
+  const tiltTarget = document.getElementById('tiltTarget');
+  const tiltBubble = document.getElementById('tiltBubble');
+  const tiltReading = document.getElementById('tiltReading');
+  const zeroTiltBtn = document.getElementById('zeroTiltBtn');
+
+  // Build compass rose ticks + letters once
+  (function buildRose(){
+    const dirs = [['N',0],['E',90],['S',180],['W',270]];
+    let svg = '';
+    for (let a = 0; a < 360; a += 15){
+      const r1 = 92, r2 = (a % 90 === 0) ? 78 : 84;
+      const rad = toRad(a);
+      const x1 = 100 + r1 * Math.sin(rad), y1 = 100 - r1 * Math.cos(rad);
+      const x2 = 100 + r2 * Math.sin(rad), y2 = 100 - r2 * Math.cos(rad);
+      svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#3A4A68" stroke-width="${a%90===0?1.6:1}"/>`;
+    }
+    dirs.forEach(([label, a]) => {
+      const rad = toRad(a);
+      const x = 100 + 66 * Math.sin(rad), y = 100 - 66 * Math.cos(rad);
+      svg += `<text x="${x}" y="${y+4}" text-anchor="middle" font-size="11" font-family="Space Grotesk" font-weight="700" fill="${label==='N'?'#E8ECF2':'#8B97AE'}">${label}</text>`;
+    });
+    rose.innerHTML = svg;
+  })();
+
+  compassBtn.onclick = async () => {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+      try {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted'){
+          lockMsg.textContent = 'Compass permission denied — allow motion & orientation access in Settings.';
+          return;
+        }
+      } catch(e){
+        lockMsg.textContent = "Couldn't request compass access.";
+        return;
+      }
+    }
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+    window.addEventListener('deviceorientation', onOrientation, true);
+    compassOn = true;
+    compassBtn.style.display = 'none';
+    tiltStrip.style.display = 'block';
+    tiltLabelsRow.style.display = 'flex';
+    zeroTiltBtn.style.display = 'block';
+    lockMsg.textContent = 'Rotate to find the target';
+  };
+
+  zeroTiltBtn.onclick = () => {
+    if (currentBeta !== null){
+      tiltZero = currentBeta;
+      zeroTiltBtn.textContent = 'Zeroed ✓';
+      setTimeout(() => zeroTiltBtn.textContent = 'Zero tilt (hold phone level first)', 1500);
+    }
+  };
+
+  function onOrientation(e){
+    let heading = null;
+    if (typeof e.webkitCompassHeading === 'number'){
+      heading = e.webkitCompassHeading;
+    } else if (e.alpha !== null && e.alpha !== undefined){
+      heading = 360 - e.alpha;
+    }
+    if (heading !== null){
+      currentHeading = (heading + 360) % 360;
+    }
+    if (e.beta !== null && e.beta !== undefined){
+      currentBeta = e.beta;
+      if (tiltZero === null) tiltZero = e.beta; // auto-zero on first reading
+    }
+    updateDial();
+  }
+
+  function angDiff(a, b){
+    let d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+  }
+
+  function updateDial(){
+    if (!look) return;
+    rose.parentElement.style.transform = '';
+    rose.setAttribute('transform', `rotate(${-currentHeading} 100 100)`);
+    // target marker stays fixed relative to rose since it's drawn at absolute bearing 0 (north)
+    targetMarker.setAttribute('transform', `rotate(${look.az} 100 100)`);
+
+    const diff = angDiff(currentHeading, look.az);
+    let tiltOk = true;
+    if (tiltZero !== null && currentBeta !== null){
+      const tiltAngle = currentBeta - tiltZero;
+      const tiltDiff = Math.abs(tiltAngle - look.el);
+      tiltOk = tiltDiff <= LOCK_TOLERANCE_DEG;
+      tiltReading.textContent = tiltAngle.toFixed(1) + '°';
+      const pct = Math.max(0, Math.min(100, 50 + tiltAngle * 2));
+      tiltBubble.style.left = pct + '%';
+      tiltBubble.classList.toggle('locked', tiltOk);
+      const targetPct = Math.max(0, Math.min(100, 50 + look.el * 2));
+      tiltTarget.style.left = targetPct + '%';
+    }
+
+    const locked = diff <= LOCK_TOLERANCE_DEG && tiltOk;
+    lockMsg.textContent = locked ? 'On target — locked' : (diff <= LOCK_TOLERANCE_DEG ? 'Azimuth good — adjust elevation' : 'Rotate ' + (((look.az - currentHeading + 540) % 360) - 180 > 0 ? 'right' : 'left'));
+    lockMsg.classList.toggle('locked', locked);
+    document.querySelector('.dial svg').style.filter = locked ? 'drop-shadow(0 0 10px rgba(51,201,127,.5))' : 'none';
+  }
+
+  // ---------- Install: tools + steps ----------
+  const TOOLS = ['Compass / this app', 'Spirit level', 'Adjustable spanner', 'Socket set', 'Cable & F-connectors', 'Signal meter or receiver', 'Silicone sealant', 'Drill & masonry bits', 'Earthing cable'];
+  const STEPS = [
+    ['Mark the mount', 'Choose a spot with clear, unobstructed line of sight toward the calculated azimuth — no trees, walls, or water tanks in the path.'],
+    ['Fix the pole plumb', 'Set the mounting pole vertical using a spirit level on two adjacent faces before tightening the base.'],
+    ['Set elevation', 'Loosen the elevation bolt and tilt the dish to the calculated elevation angle, reading it off the dish\'s built-in scale or the tilt gauge on the Locate tab.'],
+    ['Set LNB skew', 'Rotate the LNB in its collar to the skew angle shown on this tab, then snug the collar without fully tightening yet.'],
+    ['Coarse aim', 'Turn the dish toward the calculated azimuth using the compass dial on the Locate tab until the dial shows "on target".'],
+    ['Peak the signal', 'Connect the receiver and use the Peak the signal panel below — nudge azimuth and elevation a fraction of a degree at a time and note the best reading.'],
+    ['Lock everything down', 'Tighten azimuth, elevation, and skew bolts fully once peaked. Recheck the signal reading after tightening — it can shift slightly.'],
+    ['Weatherproof', 'Seal cable entry points and F-connectors with silicone or self-amalgamating tape, and route cable with a drip loop before it enters the wall.'],
+    ['Earth the mount', 'Connect the earthing cable from the dish mount to the building\'s earth point, per local electrical code.'],
+  ];
+
+  const toolList = document.getElementById('toolList');
+  const stepList = document.getElementById('stepList');
+
+  function loadState(key, fallback){
+    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch(e){ return fallback; }
+  }
+  function saveState(key, val){ try { localStorage.setItem(key, JSON.stringify(val)); } catch(e){} }
+
+  let toolState = loadState('satlock_tools', {});
+  let stepState = loadState('satlock_steps', {});
+
+  TOOLS.forEach((tool, i) => {
+    const id = 'tool' + i;
+    const wrap = document.createElement('label');
+    wrap.className = 'tool-chip' + (toolState[id] ? ' done' : '');
+    wrap.innerHTML = `<input type="checkbox" id="${id}" ${toolState[id] ? 'checked' : ''}><span>${tool}</span>`;
+    wrap.querySelector('input').onchange = (e) => {
+      toolState[id] = e.target.checked;
+      wrap.classList.toggle('done', e.target.checked);
+      saveState('satlock_tools', toolState);
+    };
+    toolList.appendChild(wrap);
+  });
+
+  STEPS.forEach((step, i) => {
+    const id = 'step' + i;
+    const li = document.createElement('li');
+    li.className = stepState[id] ? 'done' : '';
+    li.innerHTML = `<div class="num"></div><div class="body"><div class="t">${step[0]}</div><div class="d">${step[1]}</div></div><input type="checkbox" id="${id}" ${stepState[id] ? 'checked' : ''}>`;
+    li.querySelector('input').onchange = (e) => {
+      stepState[id] = e.target.checked;
+      li.classList.toggle('done', e.target.checked);
+      saveState('satlock_steps', stepState);
+    };
+    stepList.appendChild(li);
+  });
+
+  // ---------- Peak logger ----------
+  let azOffset = 0, elOffset = 0;
+  const azOffsetVal = document.getElementById('azOffsetVal');
+  const elOffsetVal = document.getElementById('elOffsetVal');
+  const signalSlider = document.getElementById('signalSlider');
+  const signalVal = document.getElementById('signalVal');
+  const peakLog = document.getElementById('peakLog');
+
+  document.getElementById('azMinus').onclick = () => { azOffset = +(azOffset - 0.5).toFixed(1); azOffsetVal.textContent = azOffset.toFixed(1); };
+  document.getElementById('azPlus').onclick  = () => { azOffset = +(azOffset + 0.5).toFixed(1); azOffsetVal.textContent = azOffset.toFixed(1); };
+  document.getElementById('elMinus').onclick = () => { elOffset = +(elOffset - 0.5).toFixed(1); elOffsetVal.textContent = elOffset.toFixed(1); };
+  document.getElementById('elPlus').onclick  = () => { elOffset = +(elOffset + 0.5).toFixed(1); elOffsetVal.textContent = elOffset.toFixed(1); };
+  signalSlider.oninput = () => { signalVal.textContent = signalSlider.value + '%'; };
+
+  let peakLogData = loadState('satlock_peaklog', []);
+  function renderPeakLog(){
+    if (peakLogData.length === 0){
+      peakLog.innerHTML = '<div class="empty">No readings saved yet.</div>';
+      return;
+    }
+    peakLog.innerHTML = peakLogData.slice().reverse().map(r =>
+      `<div class="log-item"><span class="l">${r.time} · Az ${r.az>=0?'+':''}${r.az}° / El ${r.el>=0?'+':''}${r.el}°</span><span class="r">${r.signal}%</span></div>`
+    ).join('');
+  }
+  document.getElementById('logPeakBtn').onclick = () => {
+    peakLogData.push({
+      time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+      az: azOffset, el: elOffset, signal: signalSlider.value
+    });
+    saveState('satlock_peaklog', peakLogData);
+    renderPeakLog();
+  };
+  renderPeakLog();
+
+  // ---------- Service worker ----------
+  if ('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
+    });
+  }
+
+})();
+</script>
+</body>
+</html>
